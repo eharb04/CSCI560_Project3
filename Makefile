@@ -6,7 +6,7 @@
 #  Copyright 2012 Colorado School of Mines. All rights reserved.
 #
 
-USERNAME = change-me
+USERNAME = eharbach
 
 CXX = g++
 LD = g++

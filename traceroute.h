@@ -12,7 +12,7 @@
 #include <sys/socket.h>
 #include <netinet/ip_icmp.h>
 
-
+const int BUFFER_SIZE = 64;
 inline int LOG_LEVEL = 0;
 #define TRACE   if (LOG_LEVEL > 5) { std::cout << "TRACE: "
 #define DEBUG   if (LOG_LEVEL > 4) { std::cout << "DEBUG: "
@@ -23,5 +23,10 @@ inline int LOG_LEVEL = 0;
 #define ENDL  " (" << __FILE__ << ":" << __LINE__ << ")" << std::endl; }
 
 uint16_t checksum(unsigned short *buffer, int size);
+
+void traceroute(const std::string &destIP, int maxHops = 30);
+void buildDatagram (char *packet, const std::string &destIP);
+void fill_in_IP_header(char *packet, const std::string &destIP);
+void fill_in_ICMP_header(char *packet, const std::string &destIP);
 
 #endif
