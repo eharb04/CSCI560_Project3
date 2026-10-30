@@ -157,6 +157,7 @@ void traceroute(const std::string &destIP) {
       FD_ZERO(&readSet);
       FD_SET(recvFD, &readSet);
       struct timeval timeout;
+      // Don't allow to go much longer than 15 seconds
       timeout.tv_sec = std::min(5L, std::chrono::duration_cast<std::chrono::seconds>(
                                 end_time - std::chrono::high_resolution_clock::now()).count() + 1);
       // timeout.tv_sec = 1; // shorter testing time
