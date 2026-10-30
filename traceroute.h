@@ -1,6 +1,8 @@
 #ifndef HEADER_H
 #define HEADER_H 
 
+#include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -12,7 +14,9 @@
 #include <sys/socket.h>
 #include <netinet/ip_icmp.h>
 
-
+const int BUFFER_SIZE = 64;
+const int PACKET_ID = 67;
+const int SEQ_NUM = 1;
 inline int LOG_LEVEL = 0;
 #define TRACE   if (LOG_LEVEL > 5) { std::cout << "TRACE: "
 #define DEBUG   if (LOG_LEVEL > 4) { std::cout << "DEBUG: "
@@ -23,5 +27,11 @@ inline int LOG_LEVEL = 0;
 #define ENDL  " (" << __FILE__ << ":" << __LINE__ << ")" << std::endl; }
 
 uint16_t checksum(unsigned short *buffer, int size);
+
+void traceroute(const std::string &destIP);
+void buildDatagram (char *packet, const std::string &destIP);
+void fill_in_IP_header(char *packet, const std::string &destIP);
+void fill_in_ICMP_header(char *packet, const std::string &destIP);
+void receivePacket(const int &recvFD, char *recvBuffer, bool &reply_not_received, bool &not_done_reading);
 
 #endif
