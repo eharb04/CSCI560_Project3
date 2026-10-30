@@ -37,7 +37,7 @@ void fill_in_IP_header(char *packet, const std::string &destIP) {
 
 }
 
-void fill_in_ICMP_header(char *packet, const std::string &destIP) {
+void fill_in_ICMP_header(char *packet) {
   DEBUG << "Filling in ICMP header..." << ENDL;
 
   struct icmphdr *icmp = (struct icmphdr *) packet;
@@ -52,7 +52,7 @@ void fill_in_ICMP_header(char *packet, const std::string &destIP) {
 
 void buildDatagram (char *packet, const std::string &destIP) { 
   fill_in_IP_header(packet, destIP); 
-  fill_in_ICMP_header(packet + 20, destIP); // Skip IP header (20 bytes)
+  fill_in_ICMP_header(packet + 20); // Skip IP header (20 bytes)
   memset(packet + 20 + 8, 'Z', BUFFER_SIZE - 20 - 8); // Fill payload with 'Z'
 }
 

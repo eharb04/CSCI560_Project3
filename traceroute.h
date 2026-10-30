@@ -31,7 +31,7 @@ uint16_t checksum(unsigned short *buffer, int size);
 void traceroute(const std::string &destIP);
 void buildDatagram (char *packet, const std::string &destIP);
 void fill_in_IP_header(char *packet, const std::string &destIP);
-void fill_in_ICMP_header(char *packet, const std::string &destIP);
+void fill_in_ICMP_header(char *packet);
 void receivePacket(const int &recvFD, char *recvBuffer, bool &reply_not_received, bool &not_done_reading);
 
 #endif
