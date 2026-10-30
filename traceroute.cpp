@@ -107,7 +107,7 @@ void receivePacket(const int &recvFD, char *recvBuffer, bool &reply_not_received
 // Traceroute program
 void traceroute(const std::string &destIP) {
   char sendBuffer[BUFFER_SIZE];
-  char recvBuffer[32 * BUFFER_SIZE];
+  char recvBuffer[32 * BUFFER_SIZE]; // Receive buffer could be larger
 
   // Build datagram to send
   buildDatagram(sendBuffer, destIP);
