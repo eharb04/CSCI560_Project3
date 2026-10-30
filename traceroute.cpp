@@ -1,5 +1,6 @@
 #include "traceroute.h"
 
+#include <chrono>
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
 
@@ -56,10 +57,36 @@ void buildDatagram (char *packet, const std::string &destIP) {
   fill_in_IP_header(packet, destIP); 
   fill_in_ICMP_header(packet + 20, destIP); // Skip IP header (20 bytes)
   memset(packet + 20 + 8, 'Z', BUFFER_SIZE - 20 - 8); // Fill payload with 'Z'
-} 
+}
+
+void receivePacket(const int &recvFD, char *recvBuffer, bool &reply_not_received, bool &not_done_reading) {
+  DEBUG << "Receiving packet..." << std::endl;
+  // Prepare and receive the packet
+  struct sockaddr_in recv_addr;
+  socklen_t addr_len = sizeof(recv_addr);
+  if (recvfrom(recvFD, recvBuffer, BUFFER_SIZE, 0, (struct sockaddr *)&recv_addr, &addr_len) < 0) { 
+    ERROR << "recvfrom" << ENDL;
+  }
+
+  // Get headers
+  struct iphdr *recvIP = (struct iphdr *)recvBuffer;
+  int ipHeaderLength = recvIP->ihl * 4;
+  struct icmphdr *recvICMP = (struct icmphdr *)(recvBuffer + ipHeaderLength);
+
+  if (recvICMP->type == ICMP_ECHOREPLY) {
+    INFO << "Received ICMP Echo Reply from " << inet_ntoa(recv_addr.sin_addr) << ENDL;
+    reply_not_received = false; // Stop traceroute
+    not_done_reading = false; // Stop reading
+  } else if (recvICMP->type == ICMP_TIME_EXCEEDED) {
+    INFO << "Received ICMP Time Exceeded from " << inet_ntoa(recv_addr.sin_addr) << ENDL;
+    not_done_reading = false; // Stop reading
+  } else {
+    DEBUG << "Received unexpected ICMP type: " << (int)recvICMP->type << ENDL;
+  }
+}
 
 // Traceroute program
-void traceroute(const std::string &destIP, int maxHops = 30) {
+void traceroute(const std::string &destIP) {
   char sendBuffer[BUFFER_SIZE];
   char recvBuffer[BUFFER_SIZE];
 
@@ -69,21 +96,61 @@ void traceroute(const std::string &destIP, int maxHops = 30) {
   // Create send and recieve sockets
   int sendFD, recvFD;
   if ((sendFD = socket(AF_INET, SOCK_RAW, IPPROTO_RAW)) == -1) { 
-    perror("socket"); 
+    ERROR << "socket" << ENDL;
   } 
   if ((recvFD = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP)) == -1) { 
-    perror("socket"); 
+    ERROR << "socket" << ENDL;
   }
+
+  // Set up destination address
+  struct sockaddr_in dest_addr;
+  memset(&dest_addr, 0, sizeof(dest_addr));
+  dest_addr.sin_family = AF_INET;
+  dest_addr.sin_addr.s_addr = inet_addr(destIP.c_str());
+  // //Convert an address structure to a dotted decimal string. 
+  // inet_ntop(AF_INET, &recv_addr.sin_addr, respondent_ip, INET_ADDRSTRLEN);
 
   int currTTL = 2;
   bool reply_not_received = true;
-  while ((currTTL <= maxHops) && (reply_not_received)) {
-    sendBuffer->ttl = currTTL; // Set TTL in IP header
+  while ((currTTL <= 31) && (reply_not_received)) { // Max of 30 hops
+    // Set TTL in IP header
+    struct iphdr *ip = (struct iphdr *)sendBuffer;
+    ip->ttl = currTTL;
 
-    // Compute ICMP checksum
-    sendBuffer[20]->checksum = checksum(sendBuffer + 20 + 8, BUFFER_SIZE - 20 - 8);
+    // Compute ICMP checksum, covers payload and ICMP header
+    struct icmphdr *icmp = (struct icmphdr *)(sendBuffer + 20);
+    icmp->checksum = checksum(sendBuffer + 20, BUFFER_SIZE - 20);
 
-    
+    // 6c, send buffer
+    if (sendto(sendFD, sendBuffer, BUFFER_SIZE, 0, (struct sockaddr *) &dest_addr, sizeof(dest_addr)) == -1) { 
+      ERROR << "sendto" << ENDL;
+    }
+
+    bool not_done_reading = true;
+    auto start_time = std::chrono::high_resolution_clock::now();
+    auto end_time = start_time + std::chrono::seconds(15); // 15 second timeout
+    fd_set readSet;
+    // Wait for 15 seconds max
+    while (std::chrono::high_resolution_clock::now() < end_time && not_done_reading) {
+      FD_ZERO(&readSet);
+      FD_SET(recvFD, &readSet);
+      struct timeval timeout;
+      timeout.tv_sec = 5; // Wait in 5 second intervals
+      timeout.tv_usec = 0;
+
+      int selectResult = select(recvFD + 1, &readSet, NULL, NULL, &timeout);
+      if (selectResult < 0) {
+        ERROR << "select" << ENDL;
+      } else if (selectResult == 0) {
+        DEBUG << "Timeout" << ENDL;
+      } else if (FD_ISSET(recvFD, &readSet)) { // Socket is ready
+        receivePacket(recvFD, recvBuffer, reply_not_received, not_done_reading); // Handle packet
+      } else {
+        DEBUG << "Unexpected select result" << ENDL;
+      }
+    }
+
+    currTTL++;
   }
 }
 
