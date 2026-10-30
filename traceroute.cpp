@@ -66,6 +66,7 @@ void receivePacket(const int &recvFD, char *recvBuffer, bool &reply_not_received
   int bytes_received = recvfrom(recvFD, recvBuffer, 32 * BUFFER_SIZE, 0, (struct sockaddr *)&recv_addr, &addr_len);
   if (bytes_received < 0) { 
     ERROR << "recvfrom" << ENDL;
+    return; // Error receiving packet, return to continue
   }
 
   // Get headers
@@ -116,9 +117,11 @@ void traceroute(const std::string &destIP) {
   int sendFD, recvFD;
   if ((sendFD = socket(AF_INET, SOCK_RAW, IPPROTO_RAW)) == -1) { 
     ERROR << "socket" << ENDL;
+    perror("socket"); // Fatal error, exit
   } 
   if ((recvFD = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP)) == -1) { 
     ERROR << "socket" << ENDL;
+    perror("socket"); // Fatal error, exit
   }
 
   // Set up destination address
@@ -140,11 +143,13 @@ void traceroute(const std::string &destIP) {
     // Compute ICMP checksum, covers payload and ICMP header
     struct icmphdr *icmp = (struct icmphdr *)(sendBuffer + 20);
     icmp->checksum = 0; // Reset checksum
+    icmp->un.echo.sequence = htons(currTTL - 1);
     icmp->checksum = checksum((unsigned short *)(sendBuffer + 20), BUFFER_SIZE - 20);
 
     // 6c, send buffer
     if (sendto(sendFD, sendBuffer, BUFFER_SIZE, 0, (struct sockaddr *) &dest_addr, sizeof(dest_addr)) == -1) { 
       ERROR << "sendto" << ENDL;
+      perror("sendto"); // Fatal error, exit
     }
 
     bool not_done_reading = true;
@@ -182,7 +187,6 @@ void traceroute(const std::string &destIP) {
     // First: currTTL = 2, seqNum = 1
     // Second: currTTL = 3, seqNum = 2
     // etc. until currTTL = 31, seqNum = 30
-    icmp->un.echo.sequence = htons(currTTL);
     currTTL++;
   }
 
@@ -206,7 +210,7 @@ int main (int argc, char *argv[]) {
       destIP = optarg;
       break;
     case 'd':
-      LOG_LEVEL = atoi(optarg);;
+      LOG_LEVEL = atoi(optarg);
       break;
     case ':':
     case '?':
@@ -224,4 +228,5 @@ int main (int argc, char *argv[]) {
 
   traceroute(destIP);
 
+  return 0;
 }
