@@ -73,11 +73,17 @@ void receivePacket(const int &recvFD, char *recvBuffer, bool &reply_not_received
   int ipHeaderLength = recvIP->ihl * 4;
   struct icmphdr *recvICMP = (struct icmphdr *)(recvBuffer + ipHeaderLength);
 
+  // Match ids
+  if (recvICMP->un.echo.id != htons(67)) {
+    DEBUG << "Received ICMP packet with unexpected ID: " << ntohs(recvICMP->un.echo.id) << ENDL;
+    return; // Ignore packets that don't match the expected ID
+  }
+
   if (recvICMP->type == ICMP_ECHOREPLY) {
     INFO << "Received ICMP Echo Reply from " << inet_ntoa(recv_addr.sin_addr) << ENDL;
     reply_not_received = false; // Stop traceroute
     not_done_reading = false; // Stop reading
-  } else if (recvICMP->type == ICMP_TIME_EXCEEDED) {
+  } else if (recvICMP->type == ICMP_TIME_EXCEEDED && recvICMP->code == ICMP_EXC_TTL) {
     INFO << "Received ICMP Time Exceeded from " << inet_ntoa(recv_addr.sin_addr) << ENDL;
     not_done_reading = false; // Stop reading
   } else {
