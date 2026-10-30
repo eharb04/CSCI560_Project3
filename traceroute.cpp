@@ -149,17 +149,17 @@ void traceroute(const std::string &destIP) {
 
     bool not_done_reading = true;
     auto start_time = std::chrono::high_resolution_clock::now();
-    // auto end_time = start_time + std::chrono::seconds(15); // 15 second timeout
-    auto end_time = start_time + std::chrono::seconds(3); // 15 second timeout
+    auto end_time = start_time + std::chrono::seconds(15); // 15 second timeout
+    // auto end_time = start_time + std::chrono::seconds(3); // shorter testing time
     fd_set readSet;
     // Wait for 15 seconds max
     while (std::chrono::high_resolution_clock::now() < end_time && not_done_reading) {
       FD_ZERO(&readSet);
       FD_SET(recvFD, &readSet);
       struct timeval timeout;
-      // timeout.tv_sec = std::min(5L, std::chrono::duration_cast<std::chrono::seconds>(
-      //                           end_time - std::chrono::high_resolution_clock::now()).count() + 1);
-      timeout.tv_sec = 1;
+      timeout.tv_sec = std::min(5L, std::chrono::duration_cast<std::chrono::seconds>(
+                                end_time - std::chrono::high_resolution_clock::now()).count() + 1);
+      // timeout.tv_sec = 1; // shorter testing time
       timeout.tv_usec = 0;
 
       int selectResult = select(recvFD + 1, &readSet, NULL, NULL, &timeout);
