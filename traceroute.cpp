@@ -19,7 +19,7 @@ uint16_t checksum(unsigned short *buffer, int size) {
 }
 
 void fill_in_IP_header(char *packet, const std::string &destIP) {
-  DEBUG << "Filling in IP header..." << std::endl;
+  DEBUG << "Filling in IP header..." << ENDL;
 
   struct iphdr *ip = (struct iphdr *) packet;
 
@@ -34,10 +34,11 @@ void fill_in_IP_header(char *packet, const std::string &destIP) {
   ip->check = 0; // Checksum (initially 0)
   ip->saddr = 0; // OS can fil in
   ip->daddr = inet_addr(destIP.c_str()); // Dest IP address
+
 }
 
 void fill_in_ICMP_header(char *packet, const std::string &destIP) {
-  DEBUG << "Filling in ICMP header..." << std::endl;
+  DEBUG << "Filling in ICMP header..." << ENDL;
 
   struct icmphdr *icmp = (struct icmphdr *) packet;
 
@@ -57,12 +58,13 @@ void buildDatagram (char *packet, const std::string &destIP) {
 
 // Handle receiving of packets
 void receivePacket(const int &recvFD, char *recvBuffer, bool &reply_not_received, bool &not_done_reading) {
-  DEBUG << "Receiving packet..." << std::endl;
+  DEBUG << "Receiving packet..." << ENDL;
 
   // Prepare and receive the packet
   struct sockaddr_in recv_addr;
   socklen_t addr_len = sizeof(recv_addr);
-  if ((int bytes_received = recvfrom(recvFD, recvBuffer, 32 * BUFFER_SIZE, 0, (struct sockaddr *)&recv_addr, &addr_len)) < 0) { 
+  int bytes_received = recvfrom(recvFD, recvBuffer, 32 * BUFFER_SIZE, 0, (struct sockaddr *)&recv_addr, &addr_len);
+  if (bytes_received < 0) { 
     ERROR << "recvfrom" << ENDL;
   }
 
@@ -133,6 +135,7 @@ void traceroute(const std::string &destIP) {
     // Set TTL in IP header
     struct iphdr *ip = (struct iphdr *)sendBuffer;
     ip->ttl = currTTL;
+    DEBUG << "Sending packet with TTL: " << currTTL << ENDL;
 
     // Compute ICMP checksum, covers payload and ICMP header
     struct icmphdr *icmp = (struct icmphdr *)(sendBuffer + 20);
@@ -146,14 +149,17 @@ void traceroute(const std::string &destIP) {
 
     bool not_done_reading = true;
     auto start_time = std::chrono::high_resolution_clock::now();
-    auto end_time = start_time + std::chrono::seconds(15); // 15 second timeout
+    // auto end_time = start_time + std::chrono::seconds(15); // 15 second timeout
+    auto end_time = start_time + std::chrono::seconds(3); // 15 second timeout
     fd_set readSet;
     // Wait for 15 seconds max
     while (std::chrono::high_resolution_clock::now() < end_time && not_done_reading) {
       FD_ZERO(&readSet);
       FD_SET(recvFD, &readSet);
       struct timeval timeout;
-      timeout.tv_sec = 5; // Wait in 5 second intervals
+      // timeout.tv_sec = std::min(5L, std::chrono::duration_cast<std::chrono::seconds>(
+      //                           end_time - std::chrono::high_resolution_clock::now()).count() + 1);
+      timeout.tv_sec = 1;
       timeout.tv_usec = 0;
 
       int selectResult = select(recvFD + 1, &readSet, NULL, NULL, &timeout);
