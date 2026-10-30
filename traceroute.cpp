@@ -1,9 +1,5 @@
 #include "traceroute.h"
 
-#include <chrono>
-#include <netinet/ip.h>
-#include <netinet/ip_icmp.h>
-
 // ****************************************************************************
 // * Compute the Internet Checksum over an arbitrary buffer.
 // * (written with the help of ChatGPT 3.5)
@@ -62,10 +58,11 @@ void buildDatagram (char *packet, const std::string &destIP) {
 // Handle receiving of packets
 void receivePacket(const int &recvFD, char *recvBuffer, bool &reply_not_received, bool &not_done_reading) {
   DEBUG << "Receiving packet..." << std::endl;
+
   // Prepare and receive the packet
   struct sockaddr_in recv_addr;
   socklen_t addr_len = sizeof(recv_addr);
-  if (int bytes_received = recvfrom(recvFD, recvBuffer, BUFFER_SIZE, 0, (struct sockaddr *)&recv_addr, &addr_len) < 0) { 
+  if ((int bytes_received = recvfrom(recvFD, recvBuffer, 32 * BUFFER_SIZE, 0, (struct sockaddr *)&recv_addr, &addr_len)) < 0) { 
     ERROR << "recvfrom" << ENDL;
   }
 
@@ -74,10 +71,11 @@ void receivePacket(const int &recvFD, char *recvBuffer, bool &reply_not_received
   int ipHeaderLength = recvIP->ihl * 4;
   struct icmphdr *recvICMP = (struct icmphdr *)(recvBuffer + ipHeaderLength);
 
-  // Match ids
-  if (recvICMP->un.echo.id != htons(PACKET_ID)) {
-    DEBUG << "Received ICMP packet with unexpected ID: " << ntohs(recvICMP->un.echo.id) << ENDL;
-    return; // Ignore packets that don't match the expected ID
+  // Check length
+  if (recvIP->version != 4 ||
+    ipHeaderLength < (int)sizeof(struct iphdr) ||
+    bytes_received < ipHeaderLength + (int)sizeof(struct icmphdr)) {
+    return;
   }
 
   // Convert address to dotted decimal
@@ -85,6 +83,7 @@ void receivePacket(const int &recvFD, char *recvBuffer, bool &reply_not_received
   inet_ntop(AF_INET, &recv_addr.sin_addr, respondentIP, sizeof(respondentIP));
 
   if (recvICMP->type == ICMP_ECHOREPLY) {
+
     // Match ids
     if (recvICMP->un.echo.id != htons(PACKET_ID)) {
       DEBUG << "Received ICMP packet with unexpected ID: " << ntohs(recvICMP->un.echo.id) << ENDL;
@@ -94,6 +93,7 @@ void receivePacket(const int &recvFD, char *recvBuffer, bool &reply_not_received
     std::cout << "Received ICMP Echo Reply from " << respondentIP << std::endl;
     reply_not_received = false; // Stop traceroute
     not_done_reading = false; // Stop reading
+
   } else if (recvICMP->type == ICMP_TIME_EXCEEDED && recvICMP->code == ICMP_EXC_TTL) {
     std::cout << "Received ICMP Time Exceeded from " << respondentIP << std::endl;
     not_done_reading = false; // Stop reading
@@ -105,7 +105,7 @@ void receivePacket(const int &recvFD, char *recvBuffer, bool &reply_not_received
 // Traceroute program
 void traceroute(const std::string &destIP) {
   char sendBuffer[BUFFER_SIZE];
-  char recvBuffer[BUFFER_SIZE];
+  char recvBuffer[32 * BUFFER_SIZE];
 
   // Build datagram to send
   buildDatagram(sendBuffer, destIP);
@@ -168,8 +168,20 @@ void traceroute(const std::string &destIP) {
       }
     }
 
+    if (not_done_reading) {
+      std::cout << "No response with TTL of " << currTTL << std::endl;
+    }
+
+    // First: currTTL = 2, seqNum = 1
+    // Second: currTTL = 3, seqNum = 2
+    // etc. until currTTL = 31, seqNum = 30
+    icmp->un.echo.sequence = htons(currTTL);
     currTTL++;
   }
+
+  // Close sockets
+  close(sendFD);
+  close(recvFD);
 }
 
 
@@ -195,6 +207,12 @@ int main (int argc, char *argv[]) {
       std::cout << "useage: " << argv[0] << " -t [target ip] -d [Debug Level]" << std::endl;
       exit(-1);
     }
+  }
+
+  // Ensure destination IP is provided
+  if (destIP.empty()) {
+    std::cout << "No destination specified" << std::endl;
+    exit(-1);
   }
 
   traceroute(destIP);
