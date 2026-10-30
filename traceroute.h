@@ -13,6 +13,8 @@
 #include <netinet/ip_icmp.h>
 
 const int BUFFER_SIZE = 64;
+const int PACKET_ID = 67;
+const int SEQ_NUM = 1;
 inline int LOG_LEVEL = 0;
 #define TRACE   if (LOG_LEVEL > 5) { std::cout << "TRACE: "
 #define DEBUG   if (LOG_LEVEL > 4) { std::cout << "DEBUG: "

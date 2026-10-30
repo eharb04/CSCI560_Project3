@@ -48,8 +48,8 @@ void fill_in_ICMP_header(char *packet, const std::string &destIP) {
   icmp->type = ICMP_ECHO; // Type (Echo Request)
   icmp->code = 0; // Code
   icmp->checksum = 0; // Checksum (initially 0)
-  icmp->un.echo.id = htons(67); // Id for matching echo replies
-  icmp->un.echo.sequence = htons(1); // Sequence Number
+  icmp->un.echo.id = htons(PACKET_ID); // Id for matching echo replies
+  icmp->un.echo.sequence = htons(SEQ_NUM); // Sequence Number
 
 }
 
@@ -59,12 +59,13 @@ void buildDatagram (char *packet, const std::string &destIP) {
   memset(packet + 20 + 8, 'Z', BUFFER_SIZE - 20 - 8); // Fill payload with 'Z'
 }
 
+// Handle receiving of packets
 void receivePacket(const int &recvFD, char *recvBuffer, bool &reply_not_received, bool &not_done_reading) {
   DEBUG << "Receiving packet..." << std::endl;
   // Prepare and receive the packet
   struct sockaddr_in recv_addr;
   socklen_t addr_len = sizeof(recv_addr);
-  if (recvfrom(recvFD, recvBuffer, BUFFER_SIZE, 0, (struct sockaddr *)&recv_addr, &addr_len) < 0) { 
+  if (int bytes_received = recvfrom(recvFD, recvBuffer, BUFFER_SIZE, 0, (struct sockaddr *)&recv_addr, &addr_len) < 0) { 
     ERROR << "recvfrom" << ENDL;
   }
 
@@ -74,17 +75,27 @@ void receivePacket(const int &recvFD, char *recvBuffer, bool &reply_not_received
   struct icmphdr *recvICMP = (struct icmphdr *)(recvBuffer + ipHeaderLength);
 
   // Match ids
-  if (recvICMP->un.echo.id != htons(67)) {
+  if (recvICMP->un.echo.id != htons(PACKET_ID)) {
     DEBUG << "Received ICMP packet with unexpected ID: " << ntohs(recvICMP->un.echo.id) << ENDL;
     return; // Ignore packets that don't match the expected ID
   }
 
+  // Convert address to dotted decimal
+  char respondentIP[INET_ADDRSTRLEN];
+  inet_ntop(AF_INET, &recv_addr.sin_addr, respondentIP, sizeof(respondentIP));
+
   if (recvICMP->type == ICMP_ECHOREPLY) {
-    INFO << "Received ICMP Echo Reply from " << inet_ntoa(recv_addr.sin_addr) << ENDL;
+    // Match ids
+    if (recvICMP->un.echo.id != htons(PACKET_ID)) {
+      DEBUG << "Received ICMP packet with unexpected ID: " << ntohs(recvICMP->un.echo.id) << ENDL;
+      return; // Ignore packets that don't match the expected ID
+    }
+
+    std::cout << "Received ICMP Echo Reply from " << respondentIP << std::endl;
     reply_not_received = false; // Stop traceroute
     not_done_reading = false; // Stop reading
   } else if (recvICMP->type == ICMP_TIME_EXCEEDED && recvICMP->code == ICMP_EXC_TTL) {
-    INFO << "Received ICMP Time Exceeded from " << inet_ntoa(recv_addr.sin_addr) << ENDL;
+    std::cout << "Received ICMP Time Exceeded from " << respondentIP << std::endl;
     not_done_reading = false; // Stop reading
   } else {
     DEBUG << "Received unexpected ICMP type: " << (int)recvICMP->type << ENDL;
@@ -125,7 +136,8 @@ void traceroute(const std::string &destIP) {
 
     // Compute ICMP checksum, covers payload and ICMP header
     struct icmphdr *icmp = (struct icmphdr *)(sendBuffer + 20);
-    icmp->checksum = checksum(sendBuffer + 20, BUFFER_SIZE - 20);
+    icmp->checksum = 0; // Reset checksum
+    icmp->checksum = checksum((unsigned short *)(sendBuffer + 20), BUFFER_SIZE - 20);
 
     // 6c, send buffer
     if (sendto(sendFD, sendBuffer, BUFFER_SIZE, 0, (struct sockaddr *) &dest_addr, sizeof(dest_addr)) == -1) { 
